@@ -3,6 +3,7 @@ import sqlite3
 from util import log, exceptions, resources
 from util.const import *
 from gettext import lgettext as _
+from xml.sax.saxutils import unescape
 log.logger.name = "fanfou"
 API_PREFIX = "http://api.fanfou.com"
 URL_PREFIX = "http://fanfou.com"
@@ -45,6 +46,9 @@ PROTOCOL_INFO = {
 	],
 }
 
+search_tags = re.compile(r'#<a href="/q/(.+?)">(.+?)</a>#')
+user_tags = re.compile(r'@<a href="http://fanfou\.com/(.+?)" class="former">(.+?)</a>')
+
 class Client:
 	def __init__(self, acct):
 		self.account = acct
@@ -62,14 +66,23 @@ class Client:
 			m["service"] = "fanfou"
 			m["account"] = self.account["id"]
 			m["time"] = util.parsetime(data["created_at"])
-			m["text"] = data["text"]
 			m["to_me"] = ("@%s" % self.account["name"])
-			m["html"] = util.linkify(data["text"],
-				((util.PARSE_HASH, '#<a class="hash" href="%s#search?q=\\1">\\1</a>#' % URL_PREFIX),
-					(util.PARSE_NICK, '@<a class="nick" href="%s/\\1">\\1</a>' % URL_PREFIX)), escape = False)
-			m["content"] = util.linkify(data["text"],
-				((util.PARSE_HASH, '#<a class="hash" href="gwibber:/tag?acct=%s&query=\\1">\\1</a>#' % m["account"]),
-				(util.PARSE_NICK, '@<a class="nick" href="gwibber:/user?acct=%s&name=\\1">\\1</a>' % m["account"])), escape=False)
+			content = data["text"]
+			content = search_tags.sub(
+				r'#<a class="hash" href="%s#search?q=\1">\2</a>#' % URL_PREFIX, content)
+			content = user_tags.sub(
+				r'@<a class="nick" href="%s/\1">\2</a>' % URL_PREFIX, content)
+			m["html"] = content
+			content = data["text"]
+			content = search_tags.sub(
+				r'#<a class="hash" href="gwibber:/tag?acct=%s&query=\1">\2</a>#' % m["account"], content)
+			content = user_tags.sub(
+					r'@<a class="nick" href="gwibber:/user?acct=%s&name=\1">\2</a>' % m["account"], content)
+			m["content"] = content
+			content = data["text"]
+			content = search_tags.sub(r'#\2#', content)
+			content = user_tags.sub(r'@\2', content)
+			m["text"] = unescape(data["text"])
 			images = util.imagepreview(m["text"])
 			if images:
 				m["images"] = images
@@ -139,7 +152,7 @@ class Client:
 		else: return []
 	
 	def _search(self, **args):
-		return self._get("statuses/public_timeline.json", **args)
+		return self._get("statuses/public_timeline.json", format='html', **args)
 
 	def __call__(self, opname, **args):
 		return getattr(self, opname)(**args)
@@ -155,19 +168,19 @@ class Client:
 		return db.execute(query).fetchall()[0][0]
 
 	def receive(self, count=util.COUNT, since=None):
-		return self._get("statuses/friends_timeline.json", count=count, since_id=self.get_mid_from_time(since))
+		return self._get("statuses/friends_timeline.json", count=count, since_id=self.get_mid_from_time(since), format='html')
 
 	def user_messages(self, id=None, count=util.COUNT, since=None):
-		return self._get("statuses/user_timeline.json", id=id, count=count, since_id=since)
+		return self._get("statuses/user_timeline.json", id=id, count=count, since_id=since, format='html')
 
 	def responses(self, count=util.COUNT, since=None):
-		return self._get("statuses/replies.json", count=count, since_id=self.get_mid_from_time(since))
+		return self._get("statuses/mentions.json", count=count, since_id=self.get_mid_from_time(since), format='html')
 
 	def private(self, count=util.COUNT, since=None):
 		return self._get("direct_messages.json", "private", count=count, since_id=self.get_mid_from_time(since))
 
 	def public(self):
-		return self._get("statuses/public_timeline.json")
+		return self._get("statuses/public_timeline.json", format='html')
 
 	def search(self, query, count=util.COUNT, since=None):
 		return self._search(q=query, rpp=count, since_id=self.get_mid_from_time(since))
