@@ -179,7 +179,10 @@ class Client:
 		return self._get("statuses/mentions.json", count=count, since_id=self.get_mid_from_time(since), format='html')
 
 	def private(self, count=util.COUNT, since=None):
-		return self._get("direct_messages.json", "private", count=count, since_id=self.get_mid_from_time(since))
+		since = self.get_mid_from_time(since)
+		private = self._get("direct_messages.json", "private", count=count, since_id=since) or []
+		private_sent = self._get("direct_messages/sent.json", "private", count=count, since_id=since) or []
+		return private + private_sent
 
 	def public(self):
 		return self._get("statuses/public_timeline.json", format='html')
@@ -199,12 +202,15 @@ class Client:
 		return []
 
 	def send(self, message):
-		return self._get("statuses/update.json", post=True, single=True,
-			status=message, source="gwibber")
+		m = self._get("statuses/update.json", post=True, single=True,
+			status=message, source="gwibber", format="html")[0]
+		if not m.has_key("mid"):
+			return []
+		return self._get("statuses/friends_timeline.json", count=1, since_id=m["mid"], max_id=m["mid"], format='html')
 
 	def send_private(self, message, private):
 		return self._get("direct_messages/new.json", "private", post=True, single=True,
-			text=message, screen_name=private["sender"]["nick"])
+			text=message, user=private["sender"]["id"])
 
 	def send_thread(self, message, target):
 		return self._get("statuses/update.json", post=True, single=True,
