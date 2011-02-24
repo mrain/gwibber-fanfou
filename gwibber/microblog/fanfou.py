@@ -206,7 +206,7 @@ class Client:
 			status=message, source="gwibber", format="html")[0]
 		if not m.has_key("mid"):
 			return []
-		return self._get("statuses/friends_timeline.json", count=1, since_id=m["mid"], max_id=m["mid"], format='html')
+		return self._get("statuses/show/%s.json" % m["mid"], single=True, format='html')
 
 	def send_private(self, message, private):
 		return self._get("direct_messages/new.json", "private", post=True, single=True,
