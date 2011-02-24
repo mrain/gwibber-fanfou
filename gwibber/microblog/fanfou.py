@@ -4,6 +4,7 @@ from util import log, exceptions, resources
 from util.const import *
 from gettext import lgettext as _
 from xml.sax.saxutils import unescape
+from cgi import escape
 log.logger.name = "fanfou"
 API_PREFIX = "http://api.fanfou.com"
 URL_PREFIX = "http://fanfou.com"
@@ -58,6 +59,7 @@ class Client:
 			raise exceptions.GwibberServiceError("Unavailable")
 		self.account["name"] = m["name"]
 		self.account["username"] = m["id"]
+		self.to_me = '@<a href="http://fanfou.com/%s" class="former">%s</a>' % (escape(m["id"]), m["name"])
 
 	def _common(self, data):
 		m = {}
@@ -66,7 +68,7 @@ class Client:
 			m["service"] = "fanfou"
 			m["account"] = self.account["id"]
 			m["time"] = util.parsetime(data["created_at"])
-			m["to_me"] = ("@%s" % self.account["name"])
+			m["to_me"] = self.to_me in data["text"]
 			content = data["text"]
 			content = search_tags.sub(
 				r'#<a class="hash" href="%s#search?q=\1">\2</a>#' % URL_PREFIX, content)
@@ -82,7 +84,7 @@ class Client:
 			content = data["text"]
 			content = search_tags.sub(r'#\2#', content)
 			content = user_tags.sub(r'@\2', content)
-			m["text"] = unescape(data["text"])
+			m["text"] = unescape(content)
 			images = util.imagepreview(m["text"])
 			if images:
 				m["images"] = images
